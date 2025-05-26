@@ -289,7 +289,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-foreground">VentilAI</h1>
+            <h1 className="text-4xl font-bold text-foreground">UbiRemote</h1>
             <p className="text-muted-foreground mt-2">
               Controle universal para seus dispositivos
             </p>

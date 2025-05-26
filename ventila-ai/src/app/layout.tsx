@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VentilAI - Controle Universal",
+  title: "UbiRemote - Controle Universal",
   description: "Controle universal para seus dispositivos",
 };
 
