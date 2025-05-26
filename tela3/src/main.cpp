@@ -11,8 +11,8 @@
 #include <addons/RTDBHelper.h>
 
 /* Define as credenciais do WiFi */
-#define WIFI_SSID "CLARO_2GEEC2D3"
-#define WIFI_PASSWORD "06EEC2D3"
+#define WIFI_SSID "LAPTOP-C1OJGPF7 5514"
+#define WIFI_PASSWORD ";h45085D"
 
 /* Define a URL do RTDB e o segredo do banco de dados */
 #define DATABASE_URL "https://ventilai-default-rtdb.firebaseio.com/"
@@ -110,7 +110,7 @@ void displayMainMenu()
 
     Serial.println("DEBUG: Fetching /devices for menu listing...");
     FirebaseData devices_fbdo;
-    devices_fbdo.setBSSLBufferSize(16384, 4096);
+    devices_fbdo.setBSSLBufferSize(8192, 2048);
 
     if (Firebase.getJSON(devices_fbdo, "/devices"))
     {
@@ -175,7 +175,7 @@ void displayDeviceMenu()
     // Fetch the name here when entering the device menu
     String nameToDisplay = currentDeviceUUID;
     FirebaseData name_fbdo; // Use a smaller temporary object
-    name_fbdo.setBSSLBufferSize(1024, 512);
+    name_fbdo.setBSSLBufferSize(8192, 2048);
     if (Firebase.getString(name_fbdo, "/devices/" + currentDeviceUUID + "/name"))
     {
         if (name_fbdo.dataType() == "string")
@@ -713,7 +713,7 @@ void handleSerialInput()
                 Serial.printf("DEBUG: Reading from path: %s\n", devicePath.c_str());
                 
                 FirebaseData signal_fbdo;
-                signal_fbdo.setBSSLBufferSize(4096, 1024);
+                signal_fbdo.setBSSLBufferSize(12288, 1024);
                 
                 Serial.println("DEBUG: Attempting to read ir_code from Firebase...");
                 if (Firebase.getString(signal_fbdo, devicePath + "/ir_code"))
