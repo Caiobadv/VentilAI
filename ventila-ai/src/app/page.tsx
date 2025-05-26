@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Send, Plus, Trash2, Radio, Pencil, Check, X } from "lucide-react";
+import { Send, Plus, Trash2, Radio, Pencil, Check, X, ScrollText } from "lucide-react";
 import { db } from "@/firebase";
 import {
   ref,
@@ -15,6 +15,7 @@ import {
   remove,
   off,
 } from "firebase/database";
+import Link from "next/link";
 
 const MAX_DEVICES = 5;
 
@@ -22,8 +23,10 @@ interface Device {
   id: string;
   name: string;
   description?: string;
-  signal: any;
   mock?: boolean;
+  ir_code: string;
+  code_size: number;
+  empty: boolean;
 }
 
 export default function Home() {
@@ -31,7 +34,9 @@ export default function Home() {
   const [newDevice, setNewDevice] = useState<Partial<Device>>({
     name: "",
     description: "",
-    signal: null,
+    ir_code: "",
+    code_size: 0,
+    empty: true,
   });
   const [loading, setLoading] = useState(true);
   const [waitingForSignal, setWaitingForSignal] = useState<string | null>(null);
@@ -49,7 +54,9 @@ export default function Home() {
       id: id as string,
       name: value.name,
       description: value.description,
-      signal: value.signal,
+      ir_code: value.ir_code,
+      code_size: value.code_size,
+      empty: value.empty,
     };
   }
 
@@ -62,8 +69,10 @@ export default function Home() {
           id: "mock-device-1",
           name: "Controle TV Sala (Mock)",
           description: "TV - Mocked Device (delete me)",
-          signal: { protocol: "NEC", raw: [9000, 4500, 560, 560] },
           mock: true,
+          ir_code: "",
+          code_size: 0,
+          empty: true,
         },
         ...prev,
       ];
@@ -114,7 +123,9 @@ export default function Home() {
     const deviceData = {
       name: newDevice.name,
       description: newDevice.description || "",
-      signal: null,
+      ir_code: newDevice.ir_code || "",
+      code_size: newDevice.code_size || 0,
+      empty: newDevice.empty || true,
     };
     try {
       await push(ref(db, "devices"), deviceData);
@@ -129,7 +140,9 @@ export default function Home() {
     setNewDevice({
       name: "",
       description: "",
-      signal: null,
+      ir_code: "",
+      code_size: 0,
+      empty: true,
     });
   };
 
@@ -175,12 +188,12 @@ export default function Home() {
     try {
       if (!id.startsWith("mock-device")) {
         await set(ref(db, `captureRequests/${id}`), true);
-        const signalRef = ref(db, `devices/${id}/signal`);
-        const unsubscribe = onValue(signalRef, (snapshot) => {
-          if (snapshot.exists()) {
+        const emptyRef = ref(db, `devices/${id}/empty`);
+        const unsubscribe = onValue(emptyRef, (snapshot) => {
+          if (snapshot.exists() && snapshot.val() === false) {
             setWaitingForSignal(null);
             setShowLoadingPopup(false);
-            off(signalRef);
+            off(emptyRef);
           }
         });
       } else {
@@ -205,13 +218,17 @@ export default function Home() {
     try {
       if (!id.startsWith("mock-device")) {
         await set(ref(db, `transmitRequests/${id}`), true);
-        // Optionally, listen for a transmitStatus flag here
-        // For now, just simulate a short delay
-        setTimeout(() => {
-          setTransmitting(null);
-          setIsTransmitting(false);
-          setShowLoadingPopup(false);
-        }, 2000);
+        
+        const transmitRef = ref(db, `transmitRequests/${id}`);
+        const unsubscribe = onValue(transmitRef, (snapshot) => {
+          if (snapshot.exists() && snapshot.val() === false) {
+            setTransmitting(null);
+            setIsTransmitting(false);
+            setShowLoadingPopup(false);
+            off(transmitRef);
+          }
+        });
+
       } else {
         // AJUSTAR LOGICA (APAGAR O MOCK)
         setTimeout(() => {
@@ -277,6 +294,12 @@ export default function Home() {
               Controle universal para seus dispositivos
             </p>
           </div>
+          <Link href="/logs">
+            <Button variant="outline" size="sm">
+              <ScrollText className="mr-2 h-4 w-4" />
+              Ver Logs
+            </Button>
+          </Link>
         </div>
         {error && (
           <div className="text-red-500 font-semibold mb-4">{error}</div>
@@ -285,13 +308,37 @@ export default function Home() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
             <div className="bg-zinc-900 text-white rounded-lg p-8 shadow-xl flex flex-col items-center gap-4 min-w-[300px]">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white mb-2" />
-              <div className="text-lg font-semibold">
+              <div className="text-lg font-semibold text-center">
                 {waitingForSignal
                   ? "Aguardando captura do sinal..."
                   : isTransmitting
                     ? "Transmitindo sinal..."
                     : "Processando..."}
               </div>
+              <div className="text-sm text-zinc-400 text-center">
+                {waitingForSignal
+                  ? "Aponte o controle remoto para o sensor IR e pressione o botão desejado"
+                  : isTransmitting
+                    ? "O sinal está sendo transmitido para o dispositivo"
+                    : "Aguarde enquanto processamos sua solicitação"}
+              </div>
+              <Button
+                variant="destructive"
+                className="mt-2 hover:text-red-500 cursor-pointer"
+                onClick={async () => {
+                  if (waitingForSignal) {
+                    await set(ref(db, `captureRequests/${waitingForSignal}`), false);
+                  } else if (transmitting) {
+                    await set(ref(db, `transmitRequests/${transmitting}`), false);
+                  }
+                  setWaitingForSignal(null);
+                  setTransmitting(null);
+                  setIsTransmitting(false);
+                  setShowLoadingPopup(false);
+                }}
+              >
+                Cancelar
+              </Button>
             </div>
           </div>
         )}
@@ -449,30 +496,36 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 w-full max-w-sm mx-auto">
-                <div className="flex flex-col items-center gap-2 w-full sm:flex-row sm:flex-wrap sm:justify-center sm:items-center">
-                  <Button
-                    className="w-full sm:w-auto sm:flex-1 bg-white text-black font-bold shadow border border-zinc-300 hover:bg-zinc-100 cursor-pointer px-6 py-3"
-                    onClick={() => requestSignalCapture(device.id)}
-                    disabled={waitingForSignal === device.id}
-                  >
-                    <Radio className="w-4 h-4 mr-2" />
-                    <span>{waitingForSignal === device.id ? "Aguardando Sinal..." : "Registrar Sinal"}</span>
-                  </Button>
-                  <Button
-                    onClick={() => requestTransmit(device.id, device.signal)}
-                    disabled={!device.signal || transmitting === device.id}
-                    className="w-full sm:w-auto sm:flex-1 bg-yellow-400 text-black font-bold shadow-lg border-0 hover:bg-yellow-300 cursor-pointer px-6 py-3"
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    <span>{transmitting === device.id ? "Transmitindo..." : "Transmitir Sinal"}</span>
-                  </Button>
+                <div className="flex flex-col items-center gap-2 w-full">
+                  <div className="w-full flex justify-center">
+                    <Button
+                      className="w-full bg-white text-black font-bold shadow border border-zinc-300 hover:bg-zinc-100 cursor-pointer px-6 py-3"
+                      onClick={() => requestSignalCapture(device.id)}
+                      disabled={waitingForSignal === device.id || transmitting !== null}
+                    >
+                      <Radio className="w-4 h-4 mr-2" />
+                      <span>{waitingForSignal === device.id ? "Aguardando Sinal..." : "Registrar Sinal"}</span>
+                    </Button>
+                  </div>
+
+                  <div className="w-full flex justify-center">
+                    <Button
+                      onClick={() => requestTransmit(device.id, device.ir_code)}
+                      disabled={transmitting === device.id || waitingForSignal !== null || device.empty}
+                      className="w-full bg-yellow-400 text-black font-bold shadow-lg border-0 hover:bg-yellow-300 cursor-pointer px-6 py-3"
+                    >
+                      <Send className="w-4 h-4 mr-2" />
+                      <span>{transmitting === device.id ? "Transmitindo..." : "Transmitir Sinal"}</span>
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex justify-center w-full mt-4">
+
+                <div className="flex justify-center w-full">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => deleteDevice(device.id)}
-                    className="text-muted-foreground hover:text-destructive w-auto flex-shrink-0 flex items-center justify-center min-w-0 cursor-pointer"
+                    className="text-zinc-400 hover:text-red-500 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
